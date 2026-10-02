@@ -17,7 +17,7 @@ Failed recurring payments can leave customers uncertain about what happened and 
 - Seven Java agent tools exposed through validated HTTP adapter routes.
 - Read APIs for calls, recovery activity, and database-derived dashboard metrics.
 - React + TypeScript + Vite + Tailwind dashboard with backend health, customer records, call history, recovery activity, and a start-call action.
-- Structured, bounded errors for Vapi tool requests; no authentication layer is enabled in this development demo.
+- Structured errors for Vapi tool requests and shared-key protection for application APIs.
 
 ## Architecture and request flow
 
@@ -125,7 +125,7 @@ The dashboard is served by Vite at `http://localhost:5173` in development. It sh
 
 Metric definitions: recovery rate is calls with outcome `RECOVERED` among calls with status `COMPLETED` (zero when no calls completed); average duration is the rounded mean of calls with a recorded duration; payment links sent count recovery actions whose status is `PAYMENT_LINK_SENT`; escalations count actions of type `SUPPORT_ESCALATION`.
 
-The backend allows browser CORS requests from `http://localhost:5173` and `http://127.0.0.1:5173` by default. Set `DASHBOARD_CORS_ALLOWED_ORIGINS` to change the permitted local dashboard origins.
+The backend allows browser CORS requests from `http://localhost:5173` and `http://127.0.0.1:5173` by default. Set `CORS_ALLOWED_ORIGINS` to change the permitted browser origins.
 
 ## Safety and privacy assumptions
 
@@ -133,7 +133,7 @@ The backend allows browser CORS requests from `http://localhost:5173` and `http:
 - Payment attempts are simulated locally. Generated checkout URLs use a reserved demo domain and do not process payment.
 - The voice agent must never request card numbers, CVV, PINs, passwords, bank credentials, or one-time passcodes.
 - Vapi API keys and database credentials belong in an ignored local `.env` file or a deployment secret store. Never commit them or paste them into prompts, tool arguments, or logs.
-- No Spring Security, authentication, authorization, rate limiting, or production privacy controls are configured. Keep the service bound to a trusted development environment.
+- Application APIs require `X-API-Key`; the Vapi webhook requires the separate `X-Vapi-Webhook-Secret`. `/api/health` is public. The dashboard key is bundled into the browser build and is visible to users, so this shared-key gate is suitable only for a controlled demo; use a server-side proxy or real user authentication before exposing customer data publicly.
 - Do not use real customer information or enable outbound calling to real phone numbers for this assignment demo.
 
 ## Local setup and environment variables
@@ -154,13 +154,17 @@ The root `.env.example` lists the supported variables without real credentials:
 | `DB_PORT` | Host port published by Docker Compose and used by Spring Boot. |
 | `DB_USERNAME` | Local PostgreSQL username. |
 | `DB_PASSWORD` | Local PostgreSQL password; replace the development placeholder locally. |
+| `DB_URL` | Optional full JDBC URL locally; required in the `prod` profile. |
+| `API_KEY` | Shared key required by protected application routes. |
+| `VAPI_WEBHOOK_SECRET` | Separate credential required by the Vapi webhook. |
+| `PORT` | Optional HTTP listener port supplied by platforms such as Render; defaults to `8080`. |
 | `VAPI_API_KEY` | Optional Vapi server API key for outbound call creation. Keep the real value secret. |
 | `VAPI_BASE_URL` | Vapi API base URL. |
 | `VAPI_ASSISTANT_ID` | Assistant identifier used for outbound calls. |
 | `VAPI_PHONE_NUMBER_ID` | Vapi phone-number identifier used for outbound calls. |
-| `DASHBOARD_CORS_ALLOWED_ORIGINS` | Optional comma-separated browser origins; defaults to the two local Vite origins. |
+| `CORS_ALLOWED_ORIGINS` | Comma-separated browser origins; defaults to the two local Vite origins. |
 
-The frontend may use `frontend/.env` copied from `frontend/.env.example` to set `VITE_API_BASE_URL`; its local default is `http://localhost:8080`. Vite variables are public browser configuration, not a place for secrets.
+The frontend may use `frontend/.env` copied from `frontend/.env.example` to set `VITE_API_BASE_URL` and `VITE_API_KEY`. In development the API URL defaults to `http://localhost:8080`; production builds default to same-origin. `VITE_API_KEY` is included in browser code and is not a secret. For deployment, place the frontend behind a server-side proxy or protect it with real user authentication. Production backend deployment must set `SPRING_PROFILES_ACTIVE=prod`, `DB_URL`, `DB_USERNAME`, `DB_PASSWORD`, `PORT`, `CORS_ALLOWED_ORIGINS`, `API_KEY`, and `VAPI_WEBHOOK_SECRET`; outbound calls also need the VAPI variables listed above.
 
 ## Run the backend and frontend
 
@@ -185,9 +189,10 @@ npm run dev
 Open the Vite URL shown in the terminal (normally `http://localhost:5173`). The API is available at `http://localhost:8080`. Verify the backend with:
 
 ```powershell
+$apiKey = (Select-String -Path .env -Pattern '^API_KEY=').Line.Substring(8)
 Invoke-RestMethod http://localhost:8080/api/health
-Invoke-RestMethod http://localhost:8080/api/customers
-Invoke-RestMethod http://localhost:8080/api/metrics
+Invoke-RestMethod http://localhost:8080/api/customers -Headers @{ "X-API-Key" = $apiKey }
+Invoke-RestMethod http://localhost:8080/api/metrics -Headers @{ "X-API-Key" = $apiKey }
 ```
 
 Outbound Vapi calling requires valid Vapi configuration and a reachable Vapi assistant/phone number. A Vapi-hosted service cannot reach a developer’s `localhost` URL; configure an HTTPS-reachable backend endpoint before attempting a real Vapi call. No tunnel or cloud deployment is included here.
@@ -208,7 +213,7 @@ npm ci
 npm run build
 ```
 
-Backend tests cover application startup, recovery services, Vapi webhook handling, health response, dashboard metric calculation, and Vapi tool input/error handling. No live Vapi call is part of the automated test suite.
+Backend tests cover application startup, recovery services, Vapi webhook lifecycle and credential handling, call-race reconciliation, health response, shared-key authentication, dashboard metric calculation, and Vapi tool input/error handling. No live Vapi call is part of the automated test suite.
 
 ## Known limitations
 
@@ -217,12 +222,12 @@ Backend tests cover application startup, recovery services, Vapi webhook handlin
 - The outbound-call UI requires working Vapi credentials and phone/assistant configuration; there is no local voice simulation.
 - The Vapi webhook handles the call event shapes currently modeled by the backend; it is not a general Vapi event processor.
 - Dashboard calls/actions are unpaginated demo lists; metrics are calculated over the available database records.
-- Customer verification, identity checks, authentication, authorization, and live human handoff are not implemented.
+- Customer identity verification and live human handoff are not implemented. The shared API key is a demo-level access gate; it does not provide per-user authorization.
 - The local PostgreSQL compose volume persists demo data across application restarts.
 
 ## Production improvements
 
-- Add authentication, authorization, rate limiting, audit controls, and secure service-to-service credentials.
+- Replace the demo shared API key with user authentication, role authorization, rate limiting, audit controls, and secure service-to-service credentials.
 - Replace the mock payment component with a compliant payment-provider integration and a verified payment status source.
 - Add consent management, customer verification, opt-out handling, retention rules, and protections for sensitive data.
 - Use database migrations, validated configuration, production secrets management, and separate development/test/production environments.

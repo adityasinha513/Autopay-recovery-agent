@@ -20,16 +20,19 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.time.OffsetDateTime;
+import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.atomic.AtomicReference;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -53,7 +56,7 @@ class VapiWebhookServiceTest {
         webhookService = new VapiWebhookService(callService);
         when(callRepository.findByVapiCallId(anyString()))
                 .thenAnswer(invocation -> Optional.ofNullable(storedCall.get()));
-        when(callRepository.save(any(Call.class))).thenAnswer(invocation -> {
+        lenient().when(callRepository.save(any(Call.class))).thenAnswer(invocation -> {
             Call call = invocation.getArgument(0);
             storedCall.set(call);
             return call;
@@ -61,7 +64,7 @@ class VapiWebhookServiceTest {
     }
 
     @Test
-    void createsDashboardCallForDemoCustomerFromStatusUpdate() {
+    void createsCallForCustomerFromTrustedMetadata() {
         OffsetDateTime vapiStartedAt = OffsetDateTime.parse("2026-10-02T09:00:00-04:00");
         when(customerRepository.findById(1L)).thenReturn(Optional.of(demoCustomer()));
 
@@ -75,6 +78,18 @@ class VapiWebhookServiceTest {
         assertEquals(CallStatus.IN_PROGRESS, call.getStatus());
         assertEquals(LocalDateTime.parse("2026-10-02T13:00:00"), call.getStartedAt());
         verify(customerRepository).findById(1L);
+    }
+
+    @Test
+    void ignoresUnmatchedWebhookWithoutTrustedCustomerMetadata() {
+        VapiWebhookCall call = new VapiWebhookCall("unmatched-id", "in-progress", null, null,
+                null, null);
+        VapiWebhookMessage message = new VapiWebhookMessage("status-update", "in-progress",
+                call, null, null, null);
+
+        assertFalse(webhookService.handle(message));
+        assertEquals(null, storedCall.get());
+        verify(customerRepository, never()).findById(any());
     }
 
     @Test
@@ -96,6 +111,23 @@ class VapiWebhookServiceTest {
         assertEquals(CallStatus.IN_PROGRESS, outboundCall.getStatus());
         assertEquals(17L, outboundCall.getId());
         verify(customerRepository, never()).findById(1L);
+    }
+
+    @Test
+    void ignoresLateNonTerminalWebhookAfterCallHasEnded() {
+        Call completedCall = Call.builder()
+                .id(18L)
+                .customer(demoCustomer())
+                .vapiCallId("completed-vapi-id")
+                .startedAt(LocalDateTime.parse("2026-10-02T10:00:00"))
+                .status(CallStatus.COMPLETED)
+                .build();
+        storedCall.set(completedCall);
+
+        assertTrue(webhookService.handle(event("status-update", "in-progress",
+                "completed-vapi-id", null, null, null, null)));
+
+        assertEquals(CallStatus.COMPLETED, completedCall.getStatus());
     }
 
     @Test
@@ -136,6 +168,16 @@ class VapiWebhookServiceTest {
     }
 
     @Test
+    void preservesNoAnswerStatusWhenCreatingCallFromTerminalWebhook() {
+        when(customerRepository.findById(1L)).thenReturn(Optional.of(demoCustomer()));
+
+        assertTrue(webhookService.handle(event("status-update", "no-answer",
+                "no-answer-call", null, null, null, null)));
+
+        assertEquals(CallStatus.NO_ANSWER, storedCall.get().getStatus());
+    }
+
+    @Test
     void endOfCallReportCreatesCompletedCallAndPreservesExistingOutcome() {
         Call call = Call.builder()
                 .id(29L)
@@ -160,7 +202,8 @@ class VapiWebhookServiceTest {
     private static VapiWebhookMessage event(String type, String status, String callId,
                                              String endedReason, OffsetDateTime callStartedAt,
                                              OffsetDateTime messageStartedAt, OffsetDateTime messageEndedAt) {
-        VapiWebhookCall call = new VapiWebhookCall(callId, null, callStartedAt, null, endedReason);
+        VapiWebhookCall call = new VapiWebhookCall(callId, null, callStartedAt, null, endedReason,
+                Map.of("autopayCustomerId", 1L));
         return new VapiWebhookMessage(type, status, call, messageStartedAt, messageEndedAt, endedReason);
     }
 

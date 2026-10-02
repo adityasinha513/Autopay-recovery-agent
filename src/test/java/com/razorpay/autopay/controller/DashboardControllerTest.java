@@ -11,6 +11,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
+import org.springframework.test.context.TestPropertySource;
 import org.springframework.test.web.servlet.MockMvc;
 
 import java.time.LocalDateTime;
@@ -22,6 +23,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 @WebMvcTest(DashboardController.class)
+@TestPropertySource(properties = "API_KEY=test-api-key")
 class DashboardControllerTest {
 
     @Autowired
@@ -51,7 +53,7 @@ class DashboardControllerTest {
         when(callRepository.findAll()).thenReturn(List.of(call));
         when(recoveryActionRepository.findAll()).thenReturn(List.of(paymentLink, escalation));
 
-        mockMvc.perform(get("/api/metrics"))
+        mockMvc.perform(get("/api/metrics").header("X-API-Key", "test-api-key"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.totalCalls").value(1))
                 .andExpect(jsonPath("$.completedCalls").value(1))

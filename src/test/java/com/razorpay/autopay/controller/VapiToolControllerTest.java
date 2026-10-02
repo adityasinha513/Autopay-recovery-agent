@@ -13,6 +13,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
 import org.springframework.http.MediaType;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
+import org.springframework.test.context.TestPropertySource;
 import org.springframework.test.web.servlet.MockMvc;
 
 import java.math.BigDecimal;
@@ -27,6 +28,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 @WebMvcTest(VapiToolController.class)
+@TestPropertySource(properties = "API_KEY=test-api-key")
 class VapiToolControllerTest {
 
     @Autowired
@@ -50,7 +52,7 @@ class VapiToolControllerTest {
                 42L, "Demo Customer", "+15550000000", new BigDecimal("125.00"),
                 PaymentStatus.FAILED, null, LocalDateTime.parse("2026-10-01T10:00:00")));
 
-        mockMvc.perform(post("/api/tools/vapi/get_customer_details")
+        mockMvc.perform(post("/api/tools/vapi/get_customer_details").header("X-API-Key", "test-api-key")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"customerId\":42}"))
                 .andExpect(status().isOk())
@@ -66,7 +68,7 @@ class VapiToolControllerTest {
         when(paymentTool.checkPaymentStatus(42L)).thenReturn(new PaymentStatusResponse(
                 42L, PaymentStatus.FAILED, new BigDecimal("125.00"), null, "Status checked"));
 
-        mockMvc.perform(post("/api/tools/vapi/check_payment_status")
+        mockMvc.perform(post("/api/tools/vapi/check_payment_status").header("X-API-Key", "test-api-key")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"customerId\":42}"))
                 .andExpect(status().isOk())
@@ -82,7 +84,7 @@ class VapiToolControllerTest {
         when(paymentTool.retryPayment(42L)).thenReturn(new PaymentStatusResponse(
                 42L, PaymentStatus.SUCCESS, BigDecimal.ZERO, null, "Mock retry succeeded"));
 
-        mockMvc.perform(post("/api/tools/vapi/retry_payment")
+        mockMvc.perform(post("/api/tools/vapi/retry_payment").header("X-API-Key", "test-api-key")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"customerId\":42}"))
                 .andExpect(status().isOk())
@@ -94,7 +96,7 @@ class VapiToolControllerTest {
 
     @Test
     void unknownToolReturnsBadRequest() throws Exception {
-        mockMvc.perform(post("/api/tools/vapi/not_a_tool")
+        mockMvc.perform(post("/api/tools/vapi/not_a_tool").header("X-API-Key", "test-api-key")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"customerId\":42}"))
                 .andExpect(status().isBadRequest())
@@ -105,7 +107,7 @@ class VapiToolControllerTest {
 
     @Test
     void invalidArgumentsReturnBadRequestWithoutCallingTool() throws Exception {
-        mockMvc.perform(post("/api/tools/vapi/check_payment_status")
+        mockMvc.perform(post("/api/tools/vapi/check_payment_status").header("X-API-Key", "test-api-key")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"customerId\":\"not-a-number\"}"))
                 .andExpect(status().isBadRequest())
@@ -119,7 +121,7 @@ class VapiToolControllerTest {
         doThrow(new CustomerNotFoundException("Customer not found with id: 999"))
                 .when(paymentTool).checkPaymentStatus(999L);
 
-        mockMvc.perform(post("/api/tools/vapi/check_payment_status")
+        mockMvc.perform(post("/api/tools/vapi/check_payment_status").header("X-API-Key", "test-api-key")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"customerId\":999}"))
                 .andExpect(status().isNotFound())
@@ -131,7 +133,7 @@ class VapiToolControllerTest {
     void unexpectedToolFailureReturnsStructuredJsonError() throws Exception {
         when(paymentTool.checkPaymentStatus(42L)).thenThrow(new IllegalStateException("database detail"));
 
-        mockMvc.perform(post("/api/tools/vapi/check_payment_status")
+        mockMvc.perform(post("/api/tools/vapi/check_payment_status").header("X-API-Key", "test-api-key")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"customerId\":42}"))
                 .andExpect(status().isInternalServerError())

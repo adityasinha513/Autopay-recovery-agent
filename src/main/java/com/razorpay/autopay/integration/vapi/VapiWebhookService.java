@@ -7,9 +7,11 @@ import com.razorpay.autopay.service.CallService;
 import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
 
+import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
+import java.util.Map;
 
 @Service
 public class VapiWebhookService {
@@ -45,7 +47,20 @@ public class VapiWebhookService {
         LocalDateTime startedAt = toUtcLocalDateTime(firstTimestamp(message.startedAt(), vapiCall.startedAt()));
         LocalDateTime endedAt = toUtcLocalDateTime(firstTimestamp(message.endedAt(), vapiCall.endedAt()));
 
-        return callService.upsertFromVapi(vapiCall.id(), status, startedAt, endedAt).isPresent();
+        return callService.upsertFromVapi(vapiCall.id(), status, startedAt, endedAt,
+                customerId(vapiCall.metadata())).isPresent();
+    }
+
+    private Long customerId(Map<String, Object> metadata) {
+        if (metadata == null || !(metadata.get("autopayCustomerId") instanceof Number value)) {
+            return null;
+        }
+        try {
+            long customerId = new BigDecimal(value.toString()).longValueExact();
+            return customerId > 0 ? customerId : null;
+        } catch (NumberFormatException | ArithmeticException exception) {
+            return null;
+        }
     }
 
     private CallStatus mapStatus(String status, String endedReason) {

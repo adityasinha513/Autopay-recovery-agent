@@ -1,5 +1,6 @@
 package com.razorpay.autopay.integration.vapi;
 
+import com.razorpay.autopay.integration.vapi.dto.VapiAssistantOverrides;
 import com.razorpay.autopay.integration.vapi.dto.VapiCallResponse;
 import com.razorpay.autopay.integration.vapi.dto.VapiCreateCallRequest;
 import com.razorpay.autopay.integration.vapi.dto.VapiCustomerRequest;
@@ -10,6 +11,8 @@ import org.springframework.util.StringUtils;
 import org.springframework.web.client.RestClient;
 import org.springframework.web.client.RestClientException;
 import org.springframework.web.client.RestClientResponseException;
+
+import java.util.Map;
 
 @Service
 public class VapiService {
@@ -30,7 +33,9 @@ public class VapiService {
         VapiCreateCallRequest request = new VapiCreateCallRequest(
                 properties.assistantId(),
                 properties.phoneNumberId(),
-                new VapiCustomerRequest(customerPhone, customerName)
+                new VapiCustomerRequest(customerPhone, customerName),
+                Map.of("autopayCustomerId", customerId),
+                new VapiAssistantOverrides(Map.of("autopayCustomerId", customerId))
         );
 
         VapiCallResponse response = execute(() -> restClient.post()

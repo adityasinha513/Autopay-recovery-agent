@@ -39,10 +39,12 @@ type Metrics = {
   escalations: number
 }
 
-const API_BASE = (import.meta.env.VITE_API_BASE_URL || 'http://localhost:8080').replace(/\/$/, '')
+const API_BASE = (import.meta.env.VITE_API_BASE_URL || (import.meta.env.DEV ? 'http://localhost:8080' : '')).replace(/\/$/, '')
+const API_KEY = import.meta.env.VITE_API_KEY || ''
+const API_HEADERS = { 'X-API-Key': API_KEY }
 
 async function getJson<T>(path: string): Promise<T> {
-  const response = await fetch(`${API_BASE}${path}`)
+  const response = await fetch(`${API_BASE}${path}`, { headers: API_HEADERS })
   if (!response.ok) throw new Error(await readError(response))
   return response.json() as Promise<T>
 }
@@ -61,19 +63,23 @@ function formatMoney(amount: number) {
 }
 
 function formatDate(value: string) {
+  if (!value || Number.isNaN(new Date(value).getTime())) return '—'
   return new Intl.DateTimeFormat('en-IN', { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(value))
 }
 
 function formatDuration(seconds: number | null | undefined) {
   if (seconds == null) return '—'
+  if (!Number.isFinite(seconds) || seconds < 0) return '—'
+  const hours = Math.floor(seconds / 3600)
   const minutes = Math.floor(seconds / 60)
   const remainder = seconds % 60
+  if (hours) return `${hours}h ${Math.floor((seconds % 3600) / 60).toString().padStart(2, '0')}m`
   return minutes ? `${minutes}m ${remainder.toString().padStart(2, '0')}s` : `${remainder}s`
 }
 
 function readable(value: string | null | undefined) {
   if (!value) return '—'
-  return value.toLowerCase().split('_').map((part) => part.charAt(0).toUpperCase() + part.slice(1)).join(' ')
+  return value.toLowerCase().replaceAll('_', ' ').replaceAll('-', ' ').split(' ').map((part) => part.charAt(0).toUpperCase() + part.slice(1)).join(' ')
 }
 
 function Icon({ name, className = 'h-5 w-5' }: { name: string; className?: string }) {
@@ -95,7 +101,7 @@ function StatusBadge({ value }: { value: string | null | undefined }) {
   const status = value?.toUpperCase() || 'UNKNOWN'
   const style = ['COMPLETED', 'SUCCESS', 'RECOVERED', 'PAYMENT_LINK_SENT', 'ALREADY_PAID'].includes(status)
     ? 'bg-emerald-50 text-emerald-700 ring-emerald-100'
-    : ['FAILED', 'NO_ANSWER', 'CUSTOMER_REFUSED'].includes(status)
+    : ['FAILED', 'NO_ANSWER', 'CUSTOMER_REFUSED', 'DECLINED', 'INSUFFICIENT_FUNDS', 'EXPIRED_CARD', 'CARD_EXPIRED', 'BANK_DECLINED', 'AUTHENTICATION_FAILED', 'TECHNICAL_ERROR'].includes(status)
       ? 'bg-rose-50 text-rose-700 ring-rose-100'
       : ['IN_PROGRESS', 'RINGING', 'INITIATED', 'PENDING', 'RETRY_SCHEDULED'].includes(status)
         ? 'bg-amber-50 text-amber-700 ring-amber-100'
@@ -109,6 +115,7 @@ function App() {
   const [actions, setActions] = useState<RecoveryAction[]>([])
   const [metrics, setMetrics] = useState<Metrics | null>(null)
   const [loading, setLoading] = useState(true)
+  const [refreshing, setRefreshing] = useState(false)
   const [loadError, setLoadError] = useState('')
   const [backendOnline, setBackendOnline] = useState<boolean | null>(null)
   const [callingCustomer, setCallingCustomer] = useState<number | null>(null)
@@ -117,6 +124,7 @@ function App() {
 
   const loadDashboard = useCallback(async (showLoading = false) => {
     if (showLoading) setLoading(true)
+    else setRefreshing(true)
     setLoadError('')
     try {
       const [customerData, callData, actionData, metricData] = await Promise.all([
@@ -136,6 +144,7 @@ function App() {
       setBackendOnline(false)
     } finally {
       setLoading(false)
+      setRefreshing(false)
     }
   }, [])
 
@@ -154,19 +163,19 @@ function App() {
   }, [loadDashboard])
 
   const metricCards = useMemo(() => [
-    { label: 'Total calls', value: metrics?.totalCalls ?? 0, icon: 'phone', detail: 'All outbound attempts', tone: 'green' },
-    { label: 'Completed calls', value: metrics?.completedCalls ?? 0, icon: 'activity', detail: 'Successfully concluded', tone: 'blue' },
-    { label: 'Recovery rate', value: `${(metrics?.recoveryRate ?? 0).toFixed(1)}%`, icon: 'grid', detail: 'Recovered / completed', tone: 'green' },
+    { label: 'Total calls', value: metrics?.totalCalls ?? '—', icon: 'phone', detail: 'All outbound attempts', tone: 'green' },
+    { label: 'Completed calls', value: metrics?.completedCalls ?? '—', icon: 'activity', detail: 'Successfully concluded', tone: 'blue' },
+    { label: 'Recovery rate', value: metrics ? `${metrics.recoveryRate.toFixed(1)}%` : '—', icon: 'grid', detail: 'Recovered / completed', tone: 'green' },
     { label: 'Avg. call duration', value: formatDuration(metrics?.averageCallDurationSeconds), icon: 'clock', detail: 'Completed call average', tone: 'violet' },
-    { label: 'Payment links sent', value: metrics?.paymentLinksSent ?? 0, icon: 'link', detail: 'Recorded recovery outcomes', tone: 'amber' },
-    { label: 'Escalations', value: metrics?.escalations ?? 0, icon: 'alert', detail: 'Support requests recorded', tone: 'rose' },
+    { label: 'Payment links sent', value: metrics?.paymentLinksSent ?? '—', icon: 'link', detail: 'Recorded recovery outcomes', tone: 'amber' },
+    { label: 'Escalations', value: metrics?.escalations ?? '—', icon: 'alert', detail: 'Support requests recorded', tone: 'rose' },
   ], [metrics])
 
   async function startCall(customer: Customer) {
     setCallingCustomer(customer.id)
     setCallMessage(null)
     try {
-      const response = await fetch(`${API_BASE}/api/calls/outbound/${customer.id}`, { method: 'POST' })
+      const response = await fetch(`${API_BASE}/api/calls/outbound/${customer.id}`, { method: 'POST', headers: API_HEADERS })
       if (!response.ok) throw new Error(await readError(response))
       const result = await response.json() as { callId: number; status: string }
       setCallMessage({ type: 'success', text: `Call request created for ${customer.name} · #${result.callId} · ${readable(result.status)}.` })
@@ -200,7 +209,7 @@ function App() {
         <div className="mt-5 px-3 text-[10px] text-white/35">PayFlow Recovery · Demo</div>
       </aside>
 
-      <main className="main-content ml-[248px] min-h-screen px-8 py-7 xl:px-10">
+      <main className="main-content ml-[248px] min-h-screen px-8 py-7 xl:px-10" aria-busy={loading || refreshing}>
         <header className="flex flex-wrap items-center justify-between gap-4 border-b border-line pb-6">
           <div>
             <div className="text-xs font-semibold text-muted">PAYFLOW <span className="mx-1 text-slate-300">/</span> OVERVIEW</div>
@@ -208,11 +217,14 @@ function App() {
             <p className="mt-1 text-sm text-muted">Monitor conversations and help customers get back on track.</p>
           </div>
           <div className="flex items-center gap-3">
-            <div className={`health-pill ${backendOnline ? 'health-up' : backendOnline === false ? 'health-down' : 'health-checking'}`}>
-              <span className="health-dot" />
+            <div className={`health-pill ${backendOnline ? 'health-up' : backendOnline === false ? 'health-down' : 'health-checking'}`} role="status" aria-live="polite">
+              <span className="health-dot" aria-hidden="true" />
               {backendOnline ? 'System operational' : backendOnline === false ? 'Backend unavailable' : 'Checking system'}
             </div>
-            <button type="button" onClick={() => void loadDashboard(true)} className="icon-button" aria-label="Refresh dashboard" title="Refresh dashboard"><Icon name="refresh" /></button>
+            <button type="button" onClick={() => void loadDashboard()} className="refresh-button" disabled={refreshing} aria-label="Refresh dashboard data">
+              <Icon name="refresh" className={refreshing ? 'h-4 w-4 refresh-spinning' : 'h-4 w-4'} />
+              <span>{refreshing ? 'Refreshing' : 'Refresh'}</span>
+            </button>
           </div>
         </header>
 
@@ -221,17 +233,17 @@ function App() {
             <div><h2 className="section-title">Recovery overview</h2><p className="section-subtitle">Live performance from your recovery data</p></div>
             <div className="text-xs text-muted">{lastUpdated ? `Updated ${lastUpdated.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}` : 'Waiting for data'}</div>
           </div>
-          {loading && <div className="mb-4 h-1 overflow-hidden rounded-full bg-slate-200"><div className="h-full w-1/3 rounded-full bg-brand" /></div>}
-          {loadError && <div className="mb-4 flex items-center justify-between rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-800"><span>Dashboard data unavailable: {loadError}</span><button className="font-semibold underline" onClick={() => void loadDashboard(true)}>Retry</button></div>}
+          {loading && <div className="mb-4 h-1 overflow-hidden rounded-full bg-slate-200" role="progressbar" aria-label="Loading dashboard data"><div className="h-full w-1/3 rounded-full bg-brand loading-bar" /></div>}
+          {loadError && <div className="mb-4 flex items-center justify-between gap-4 rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-800" role="alert"><span>Dashboard data unavailable: {loadError}</span><button className="retry-button" onClick={() => void loadDashboard(true)}>Try again</button></div>}
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-6">
-            {metricCards.map((card) => <MetricCard key={card.label} {...card} />)}
+            {metricCards.map((card) => <MetricCard key={card.label} {...card} loading={loading && metrics === null} />)}
           </div>
         </section>
 
         <section id="customers" className="pt-9">
           <div className="mb-4 flex items-end justify-between gap-3">
-            <div><h2 className="section-title">Customers</h2><p className="section-subtitle">Accounts requiring payment recovery</p></div>
-            <span className="rounded-full bg-white px-3 py-1.5 text-xs font-semibold text-muted ring-1 ring-line">{customers.length} customers</span>
+            <div><h2 className="section-title">Customers requiring action</h2><p className="section-subtitle">Review the balance and choose the next recovery step</p></div>
+            <span className="rounded-full bg-white px-3 py-1.5 text-xs font-semibold text-muted ring-1 ring-line" aria-label={`${customers.length} customers`}>{customers.length} customers</span>
           </div>
           <div className="overflow-hidden rounded-2xl border border-line bg-white shadow-soft">
             <div className="overflow-x-auto">
@@ -242,17 +254,18 @@ function App() {
                   {!loading && customers.length === 0 && <tr><td colSpan={5} className="px-6 py-12 text-center text-sm text-muted">{loadError ? 'Customer records could not be loaded.' : 'No customers found.'}</td></tr>}
                   {customers.map((customer) => <tr key={customer.id} className="border-b border-line last:border-0 hover:bg-slate-50/60">
                     <td className="py-4 pl-6"><div className="flex items-center gap-3"><Avatar name={customer.name} /><div><div className="text-sm font-semibold">{customer.name}</div><div className="mt-0.5 text-xs text-muted">Customer #{customer.id}</div></div></div></td>
-                    <td className="py-4 text-sm font-semibold tabular-nums">{formatMoney(customer.amountDue)}</td>
+                    <td className="py-4 text-sm font-bold tabular-nums text-ink">{formatMoney(customer.amountDue)}</td>
                     <td className="py-4"><StatusBadge value={customer.paymentStatus} /></td>
-                    <td className="py-4 text-sm text-muted">{readable(customer.failureReason)}</td>
-                    <td className="py-4 pr-6 text-right"><button onClick={() => void startCall(customer)} disabled={callingCustomer !== null} className="primary-button" aria-label={`Start recovery call for ${customer.name}`}>
-                      {callingCustomer === customer.id ? <><span className="button-spinner" /> Starting…</> : <><Icon name="phone" className="h-4 w-4" /> Start recovery call</>}
+                    <td className="py-4">{customer.failureReason ? <StatusBadge value={customer.failureReason} /> : <span className="text-sm text-muted">—</span>}</td>
+                    <td className="py-4 pr-6 text-right"><button onClick={() => void startCall(customer)} disabled={callingCustomer !== null} className="primary-button" aria-label={`Start recovery call for ${customer.name}`} aria-describedby={callingCustomer === customer.id ? 'call-progress' : undefined}>
+                      {callingCustomer === customer.id ? <><span className="button-spinner" aria-hidden="true" /> Starting…</> : <><Icon name="phone" className="h-4 w-4" /> Start recovery call</>}
                     </button></td>
                   </tr>)}
                 </tbody>
               </table>
             </div>
-            {callMessage && <div className={`flex items-start gap-2 border-t px-6 py-3 text-sm ${callMessage.type === 'success' ? 'border-emerald-100 bg-emerald-50 text-emerald-800' : 'border-rose-100 bg-rose-50 text-rose-800'}`}><span className="font-semibold">{callMessage.type === 'success' ? 'Call started.' : 'Could not start call.'}</span><span>{callMessage.text}</span></div>}
+            {callingCustomer !== null && <p id="call-progress" className="sr-only" role="status" aria-live="polite">Starting recovery call…</p>}
+            {callMessage && <div className={`flex items-start gap-2 border-t px-6 py-3 text-sm ${callMessage.type === 'success' ? 'border-emerald-100 bg-emerald-50 text-emerald-800' : 'border-rose-100 bg-rose-50 text-rose-800'}`} role="status" aria-live="polite"><span className="font-semibold">{callMessage.type === 'success' ? 'Call request submitted.' : 'Could not start call.'}</span><span>{callMessage.text}</span></div>}
           </div>
         </section>
 
@@ -294,10 +307,10 @@ function App() {
   )
 }
 
-function MetricCard({ label, value, icon, detail, tone }: { label: string; value: string | number; icon: string; detail: string; tone: string }) {
-  return <article className="rounded-2xl border border-line bg-white p-4 shadow-soft xl:p-5">
+function MetricCard({ label, value, icon, detail, tone, loading: isLoading }: { label: string; value: string | number; icon: string; detail: string; tone: string; loading: boolean }) {
+  return <article className={`metric-card rounded-2xl border border-line bg-white p-4 shadow-soft xl:p-5 ${label === 'Recovery rate' ? 'metric-card-featured' : ''}`}>
     <div className="flex items-start justify-between gap-3"><div className="text-xs font-semibold text-muted">{label}</div><span className={`metric-icon metric-${tone}`}><Icon name={icon} className="h-[18px] w-[18px]" /></span></div>
-    <div className="mt-4 text-[27px] font-semibold tracking-tight tabular-nums">{value}</div>
+    {isLoading ? <div className="skeleton mt-4 h-8 w-24" aria-label="Loading metric" /> : <div className="metric-value mt-4 text-[27px] font-semibold tracking-tight tabular-nums">{value}</div>}
     <div className="mt-1 text-[11px] text-muted">{detail}</div>
   </article>
 }
@@ -318,9 +331,9 @@ function EmptyRow({ columns, text }: { columns: number; text: string }) {
 function ActivityItem({ action }: { action: RecoveryAction }) {
   const outcomeColor = action.status === 'RECOVERED' ? 'bg-emerald-100 text-emerald-700' : action.status === 'ESCALATED' || action.actionType === 'SUPPORT_ESCALATION' ? 'bg-rose-100 text-rose-700' : action.status === 'CUSTOMER_REFUSED' ? 'bg-slate-100 text-slate-600' : 'bg-amber-100 text-amber-700'
   const title = action.actionType === 'SUPPORT_ESCALATION' ? 'Support escalation' : action.actionType === 'CALLBACK' ? 'Callback scheduled' : readable(action.status)
-  return <article className="flex gap-3 px-6 py-4">
-    <div className={`mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-full ${outcomeColor}`}><Icon name={action.actionType === 'SUPPORT_ESCALATION' ? 'alert' : action.actionType === 'CALLBACK' ? 'clock' : action.status === 'PAYMENT_LINK_SENT' ? 'link' : 'activity'} className="h-4 w-4" /></div>
-    <div className="min-w-0 flex-1"><div className="flex flex-wrap items-center justify-between gap-2"><div className="text-sm font-semibold">{title}</div><time className="text-[11px] text-muted">{formatDate(action.createdAt)}</time></div><div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-muted"><span>Customer #{action.customerId}</span><span className="text-slate-300">·</span><StatusBadge value={action.status} /></div>{action.callbackTime && <div className="mt-1.5 text-xs text-muted">Callback: {formatDate(action.callbackTime)}</div>}{action.details && <div className="mt-1.5 truncate text-xs text-muted">{action.details}</div>}</div>
+  return <article className="activity-item flex gap-3 px-6 py-4">
+    <div className={`activity-icon mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-full ${outcomeColor}`}><Icon name={action.actionType === 'SUPPORT_ESCALATION' ? 'alert' : action.actionType === 'CALLBACK' ? 'clock' : action.status === 'PAYMENT_LINK_SENT' ? 'link' : 'activity'} className="h-4 w-4" /></div>
+    <div className="min-w-0 flex-1"><div className="flex flex-wrap items-center justify-between gap-2"><div className="text-sm font-semibold">{title}</div><time className="text-[11px] text-muted" dateTime={action.createdAt}>{formatDate(action.createdAt)}</time></div><div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-muted"><span>Customer #{action.customerId}</span><StatusBadge value={action.status} /></div>{action.callbackTime && <div className="mt-2 text-xs text-muted">Callback: {formatDate(action.callbackTime)}</div>}{action.details && <div className="mt-2 truncate text-xs text-muted">{action.details}</div>}</div>
   </article>
 }
 

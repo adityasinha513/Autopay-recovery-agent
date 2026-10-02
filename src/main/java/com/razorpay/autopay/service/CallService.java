@@ -21,8 +21,6 @@ import java.util.UUID;
 @RequiredArgsConstructor
 public class CallService {
 
-    private static final Long DEMO_CUSTOMER_ID = 1L;
-
     private final CallRepository callRepository;
     private final CustomerRepository customerRepository;
 
@@ -52,15 +50,26 @@ public class CallService {
                 .build());
     }
 
+    @Transactional
     public Call assignVapiCallId(Long callId, String vapiCallId) {
         Call call = findCall(callId);
+        Optional<Call> webhookCall = callRepository.findByVapiCallId(vapiCallId);
+        if (webhookCall.isPresent() && !webhookCall.get().getId().equals(callId)) {
+            Call existing = webhookCall.get();
+            if (!existing.getCustomer().getId().equals(call.getCustomer().getId())) {
+                throw new IllegalStateException("Vapi call is already associated with another customer");
+            }
+            callRepository.delete(call);
+            return existing;
+        }
         call.setVapiCallId(vapiCallId);
         return callRepository.save(call);
     }
 
     @Transactional
     public synchronized Optional<Call> upsertFromVapi(String vapiCallId, CallStatus status,
-                                                       LocalDateTime startedAt, LocalDateTime endedAt) {
+                                                       LocalDateTime startedAt, LocalDateTime endedAt,
+                                                       Long customerId) {
         if (vapiCallId == null || vapiCallId.isBlank() || status == null) {
             return Optional.empty();
         }
@@ -69,17 +78,21 @@ public class CallService {
         Call call;
         if (optionalCall.isPresent()) {
             call = optionalCall.get();
-            call.setStatus(status);
+            if (!isTerminal(call.getStatus())) {
+                call.setStatus(status);
+            }
         } else {
-            Customer customer = customerRepository.findById(DEMO_CUSTOMER_ID)
+            if (customerId == null || customerId <= 0) {
+                return Optional.empty();
+            }
+            Customer customer = customerRepository.findById(customerId)
                     .orElseThrow(() -> new CustomerNotFoundException(
-                            "Customer not found with id: " + DEMO_CUSTOMER_ID));
-            CallStatus initialStatus = isTerminal(status) ? CallStatus.COMPLETED : status;
+                            "Customer not found with id: " + customerId));
             call = Call.builder()
                     .customer(customer)
                     .vapiCallId(vapiCallId)
                     .startedAt(startedAt != null ? startedAt : LocalDateTime.now())
-                    .status(initialStatus)
+                    .status(status)
                     .build();
         }
 
