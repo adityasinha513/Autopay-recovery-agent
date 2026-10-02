@@ -6,8 +6,6 @@
 
 > Assignment/demo system. Customer records are fictional and payment processing is mocked. No real payment is attempted or collected.
 
-![System architecture: Vapi and the dashboard connect to the Spring Boot API, which delegates to application services and PostgreSQL.](docs/images/system-architecture.svg)
-
 ## Overview
 
 Failed recurring payments need a clear next step: understand the reported failure, retry when appropriate, offer a way to pay, arrange a follow-up, or record a support request. This project demonstrates that workflow through a voice assistant, a REST API, and an operations dashboard.
