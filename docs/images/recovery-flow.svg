@@ -1,0 +1,32 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1320" height="860" viewBox="0 0 1320 860" role="img" aria-labelledby="title desc">
+  <title id="title">Autopay recovery conversation flow</title>
+  <desc id="desc">The automated assistant discloses its identity, checks demo customer context and payment status, then chooses an action based on the conversation. It records the outcome, confirms only the backend result and ends the call.</desc>
+  <defs>
+    <marker id="a" markerWidth="10" markerHeight="10" refX="8" refY="5" orient="auto"><path d="M0 0 10 5 0 10Z" fill="#52756b"/></marker>
+    <style>text{font-family:Inter,ui-sans-serif,system-ui,-apple-system,"Segoe UI",sans-serif;fill:#172b27}.title{font-size:27px;font-weight:700}.sub{font-size:14px;fill:#62746f}.label{font-size:15px;font-weight:700}.small{font-size:12px;fill:#60716d}.box{fill:#fff;stroke:#dce7e2;stroke-width:1.5}.green{fill:#e6f4ec;stroke:#c6e8d7;stroke-width:1.5}.blue{fill:#edf3fb;stroke:#d4e0f0;stroke-width:1.5}.amber{fill:#fff6e7;stroke:#f4dfb9;stroke-width:1.5}.rose{fill:#fff0f1;stroke:#f1d1d5;stroke-width:1.5}.line{fill:none;stroke:#52756b;stroke-width:2.3;marker-end:url(#a)}.dash{fill:none;stroke:#98ada4;stroke-width:1.8;stroke-dasharray:6 5;marker-end:url(#a)}</style>
+  </defs>
+  <rect width="1320" height="820" rx="24" fill="#f6f8f7"/>
+  <text x="52" y="62" class="title">Recovery conversation flow</text>
+  <text x="52" y="88" class="sub">Prompt-led decisions use backend-confirmed facts; the backend performs and records the selected operation.</text>
+
+  <rect x="450" y="124" width="420" height="72" rx="16" class="blue"/><text x="660" y="154" text-anchor="middle" class="label">Outbound call starts</text><text x="660" y="177" text-anchor="middle" class="small">Backend creates a call record and passes customer context to Vapi</text>
+  <path d="M660 196v25" class="line"/>
+  <rect x="450" y="224" width="420" height="72" rx="16" class="box"/><text x="660" y="254" text-anchor="middle" class="label">Disclose · listen · confirm context</text><text x="660" y="277" text-anchor="middle" class="small">Identify as automated; use fictional demo record only</text>
+  <path d="M660 296v25" class="line"/>
+  <rect x="450" y="324" width="420" height="72" rx="16" class="box"/><text x="660" y="354" text-anchor="middle" class="label">Check payment status</text><text x="660" y="377" text-anchor="middle" class="small">Always check before a retry; also check “already paid” reports</text>
+  <path d="M660 396v30" class="line"/>
+  <path d="M660 426 264 478M660 426 528 478M660 426 792 478M660 426 1056 478" class="line"/>
+
+  <rect x="76" y="482" width="300" height="116" rx="16" class="green"/><text x="226" y="514" text-anchor="middle" class="label">Retry payment</text><text x="226" y="540" text-anchor="middle" class="small">Only after customer permission</text><text x="226" y="563" text-anchor="middle" class="small">Mock outcome: success / failed / pending</text><text x="226" y="584" text-anchor="middle" class="small">PaymentService → MockPaymentService</text>
+  <rect x="414" y="482" width="228" height="116" rx="16" class="blue"/><text x="528" y="514" text-anchor="middle" class="label">Send payment link</text><text x="528" y="540" text-anchor="middle" class="small">Creates fictional .example URL</text><text x="528" y="563" text-anchor="middle" class="small">No payment is collected</text>
+  <rect x="678" y="482" width="228" height="116" rx="16" class="amber"/><text x="792" y="514" text-anchor="middle" class="label">Schedule callback</text><text x="792" y="540" text-anchor="middle" class="small">Record requested local time</text><text x="792" y="563" text-anchor="middle" class="small">No call scheduler is connected</text>
+  <rect x="942" y="482" width="300" height="116" rx="16" class="rose"/><text x="1092" y="514" text-anchor="middle" class="label">Record support request</text><text x="1092" y="540" text-anchor="middle" class="small">Used for human request or unresolved issue</text><text x="1092" y="563" text-anchor="middle" class="small">Records escalation; does not transfer call</text>
+
+  <path d="M226 598v38H660M528 598v38M792 598v38M1092 598v38H660" class="dash"/>
+  <rect x="450" y="642" width="420" height="66" rx="16" class="box"/><text x="660" y="670" text-anchor="middle" class="label">Record the conversation outcome</text><text x="660" y="692" text-anchor="middle" class="small">Outcome/action saved; latest eligible call is updated where applicable</text>
+  <path d="M660 708v22" class="line"/>
+  <rect x="450" y="734" width="420" height="56" rx="16" class="green"/><text x="660" y="769" text-anchor="middle" class="label">Confirm next step · Vapi endCall</text>
+
+  <text x="52" y="836" class="small">Refusal: stop the recovery pitch, record CUSTOMER_REFUSED when appropriate, close courteously.</text>
+  <text x="952" y="836" class="small">Sensitive payment credentials are never requested.</text>
+</svg>

@@ -1,211 +1,196 @@
 # Autopay Recovery Agent
 
-**PayFlow Automated Payment Recovery** is a local-development demo of a voice-assisted workflow for helping customers resolve failed recurring payments. It combines a Spring Boot API, PostgreSQL persistence, a Vapi integration boundary, and a React dashboard for inspecting fictional demo activity.
+**A voice-assisted recovery workflow with a small, auditable Spring Boot backend.** Vapi handles the conversation and invokes tools; the backend owns customer lookup, mock payment operations, recovery records, and call persistence.
 
-> This repository is an assignment/demo project. Customer records, payment attempts, and payment links are fictional. Payment processing is mocked; no real payment is collected.
+[Open the live dashboard](https://autopay-recovery-agent.vercel.app/) · [Backend health endpoint](https://autopay-recovery-agent-production.up.railway.app/api/health) · [GitHub repository](https://github.com/adityasinha513/Autopay-recovery-agent)
 
-## Problem statement
+> Assignment/demo system. Customer records are fictional and payment processing is mocked. No real payment is attempted or collected.
 
-Failed recurring payments can leave customers uncertain about what happened and what to do next. Support teams need a consistent way to check a payment, offer a retry or payment link, arrange a callback, and record an escalation or outcome. This project demonstrates that workflow through a voice-agent tool layer and a simple dashboard, with business operations kept in the backend.
+![System architecture: Vapi and the dashboard connect to the Spring Boot API, which delegates to application services and PostgreSQL.](docs/images/system-architecture.svg)
 
-## Key features
+## Overview
 
-- Spring Boot REST API backed by PostgreSQL and JPA.
-- Seeded fictional customer records for local demonstrations.
-- Mock payment status, retry, and payment-link operations.
-- Vapi client integration for outbound calls and call webhooks.
-- Seven Java agent tools exposed through validated HTTP adapter routes.
-- Read APIs for calls, recovery activity, and database-derived dashboard metrics.
-- React + TypeScript + Vite + Tailwind dashboard with backend health, customer records, call history, recovery activity, and a start-call action.
-- Structured errors for Vapi tool requests and shared-key protection for application APIs.
+Failed recurring payments need a clear next step: understand the reported failure, retry when appropriate, offer a way to pay, arrange a follow-up, or record a support request. This project demonstrates that workflow through a voice assistant, a REST API, and an operations dashboard.
 
-## Architecture and request flow
+The guiding design choice is **the AI handles conversation; the backend handles business operations**. The model selects from a finite set of HTTP tools. Spring validates each request and delegates to existing Java tools and services, keeping payment and persistence behavior out of the prompt.
 
-```text
-PayFlow React dashboard ──HTTP/JSON──> Spring Boot controllers
-                                          │
-Vapi API Request tools ─HTTP/JSON─────────┤
-                                          ▼
-                           Agent tools / application services
-                                          │
-                                          ▼
-                              Spring Data JPA repositories
-                                          │
-                                          ▼
-                                     PostgreSQL
+## Architecture
 
-Outbound-call path: Dashboard → outbound-call controller → customer/call services
-                    → VapiService → Vapi API
-Vapi call events:   Vapi → /api/webhooks/vapi → VapiWebhookService → CallService → PostgreSQL
-```
+![Request flow across Vapi, Spring Boot, services, repositories, PostgreSQL, and the dashboard.](docs/images/system-architecture.svg)
 
-Controllers validate/route HTTP requests. Services contain application behavior and delegate persistence to repositories. Agent tool components adapt existing services into small callable operations; the HTTP adapter validates tool arguments and delegates to those components rather than duplicating business logic. Dashboard response DTOs expose only the fields the UI needs.
+The backend is a modular monolith:
 
-## Voice-agent flow with Vapi
+- **Vapi** hosts the voice conversation, model, voice, API Request tools, and built-in `endCall` tool. A Vapi API Request invokes the backend over HTTPS.
+- **Spring Boot** provides customer and payment APIs, the dashboard APIs, an outbound-call endpoint, an HTTP tool adapter, and a separate call-lifecycle webhook.
+- **Agent tools and services** reuse `CustomerService`, `PaymentService`, `RecoveryService`, and `CallService`. `MockPaymentService` simulates payment attempts.
+- **Spring Data JPA** persists `Customer`, `Call`, and `RecoveryAction` entities in PostgreSQL.
+- **React dashboard** reads customers, calls, recovery activity, and metrics from the same API and can request an outbound call.
 
-The Vapi assistant configuration, system prompt, API Request tool schemas, and demo conversation scenarios are documented in [`docs/vapi-agent.md`](docs/vapi-agent.md).
+### Request boundaries
 
-1. The assistant identifies itself as automated and confirms that it is a suitable time to speak.
-2. It obtains the customer ID from trusted call context and loads demo customer details when needed.
-3. It checks payment status before any retry and asks permission before attempting one.
-4. It can offer the mock payment link, schedule a callback, or record a support escalation.
-5. It records the final recovery outcome and confirms only what the backend reports.
-6. Vapi call lifecycle events are sent to `POST /api/webhooks/vapi` to update the call record where supported.
+![Vapi tool execution from the conversation to a validated backend result.](docs/images/agent-tool-flow.svg)
 
-The assistant must not request payment credentials, imply that it is human, pressure a customer who refuses, or claim payment success unless the backend confirms it. Use Vapi **API Request** tools for the direct JSON routes in this project; Vapi Function tools use a different webhook envelope.
+1. The backend loads the selected demo customer and creates a local call record when an outbound call is requested.
+2. The server sends the customer phone/name to Vapi and sets the customer ID in call context (`autopayCustomerId`).
+3. Vapi sends call lifecycle events to `/api/webhooks/vapi`. The backend maps supported status events onto the local call record and reconciles events that arrive before the create-call response.
+4. During the conversation, a Vapi **API Request** sends direct JSON arguments to `/api/tools/vapi/{toolName}` with `X-API-Key`. The adapter validates the arguments and calls the existing Java tool.
+5. The service result is returned to the model as JSON. Vapi can then speak the confirmed result and use its built-in `endCall` tool.
 
-## Backend APIs
+The assistant prompt asks it to check status before retrying and obtain customer permission. These are prompt-level conversation rules; the Java retry endpoint itself does not enforce the order or consent. Backend input validation and shared-key checks are enforced independently.
 
-All routes are relative to `http://localhost:8080` by default.
+## Recovery workflow
 
-| Method | Route | Purpose |
-|---|---|---|
-| `GET` | `/api/health` | Simple application health response. |
-| `GET` | `/api/customers` | List fictional customers. |
-| `GET` | `/api/customers/{id}` | Get a customer by ID. |
-| `GET` | `/api/customers/phone/{phone}` | Find a customer by phone. |
-| `GET` | `/api/payments/{customerId}` | Read mock payment status. |
-| `POST` | `/api/payments/{customerId}/retry` | Perform a mock payment retry. |
-| `POST` | `/api/payments/{customerId}/link` | Generate a fictional payment link. |
-| `POST` | `/api/calls/outbound/{customerId}` | Create a call record and request an outbound Vapi call. |
-| `GET` | `/api/calls` | Return recent call summaries for the dashboard. |
-| `GET` | `/api/recovery-actions` | Return recent recovery actions. |
-| `GET` | `/api/metrics` | Calculate dashboard metrics from persisted calls/actions. |
-| `POST` | `/api/tools/vapi/get_customer_details` | Invoke `CustomerTool.getCustomerDetails`. |
-| `POST` | `/api/tools/vapi/check_payment_status` | Invoke `PaymentTool.checkPaymentStatus`. |
-| `POST` | `/api/tools/vapi/retry_payment` | Invoke `PaymentTool.retryPayment`. |
-| `POST` | `/api/tools/vapi/send_payment_link` | Invoke `PaymentTool.sendPaymentLink`. |
-| `POST` | `/api/tools/vapi/schedule_callback` | Invoke `RecoveryTool.scheduleCallback`. |
-| `POST` | `/api/tools/vapi/record_recovery_outcome` | Invoke `RecoveryTool.recordRecoveryOutcome`. |
-| `POST` | `/api/tools/vapi/escalate_to_support` | Invoke `SupportTool.escalateToSupport`. |
-| `POST` | `/api/webhooks/vapi` | Accept supported Vapi call lifecycle events. |
+![Conversation path from payment status check to retry, payment link, callback, escalation, outcome recording, and call end.](docs/images/recovery-flow.svg)
 
-Agent tool routes accept direct JSON arguments, for example `{"customerId":1}`. Callback scheduling also requires an ISO local `callbackTime`; outcome recording requires a supported `outcome`; escalation requires a non-empty `reason`. Successful calls return JSON DTOs. Invalid arguments and unknown tools return HTTP 400 JSON; missing customers return HTTP 404; unexpected tool failures return a generic HTTP 500 JSON response.
+The configured demo scenarios cover insufficient funds, expired card, bank decline, a customer who wants to pay now, an unrecognized payment, a request for human support, an “already paid” claim, a later callback, refusal, and a technical issue. These are prompt scenarios over the seeded data and tools; they are not separate scenario-specific backend rules.
 
 ## Agent tools
 
-| Tool | Responsibility |
-|---|---|
-| `CustomerTool.getCustomerDetails(customerId)` | Return the customer’s demo account and payment context. |
-| `PaymentTool.checkPaymentStatus(customerId)` | Read current mock status and failure reason. |
-| `PaymentTool.retryPayment(customerId)` | Attempt a mock retry using the existing payment service. |
-| `PaymentTool.sendPaymentLink(customerId)` | Generate a fictional checkout link. |
-| `RecoveryTool.scheduleCallback(customerId, callbackTime)` | Record a requested callback. |
-| `RecoveryTool.recordRecoveryOutcome(customerId, outcome)` | Persist a recovery outcome and associate it with the latest eligible call. |
-| `SupportTool.escalateToSupport(customerId, reason)` | Record a support escalation; this does not transfer the call to a live agent. |
+Vapi API Request tool names map directly to the existing Spring tool components:
 
-## Technology stack
+| Tool | Required JSON arguments | Backend responsibility |
+|---|---|---|
+| `get_customer_details` | `customerId` | Return the selected fictional customer record. |
+| `check_payment_status` | `customerId` | Read the current stored mock payment status and failure reason. |
+| `retry_payment` | `customerId` | Run one mock attempt and persist its simulated status. |
+| `send_payment_link` | `customerId` | Return a fictional `.example` checkout URL; it cannot collect payment. |
+| `schedule_callback` | `customerId`, `callbackTime` | Store a callback action and requested local date/time. |
+| `record_recovery_outcome` | `customerId`, `outcome` | Store an outcome and associate it with the latest eligible call when available. |
+| `escalate_to_support` | `customerId`, `reason` | Record a support request; it does not transfer the call to a human. |
 
-- **Backend:** Java 21, Spring Boot, Spring MVC, Spring Data JPA, Hibernate, Maven.
-- **Database:** PostgreSQL 16, Docker Compose for local development.
-- **Voice integration:** Vapi REST API through Spring `RestClient`, outbound-call and webhook integration.
-- **Frontend:** React, TypeScript, Vite, Tailwind CSS.
-- **Tests:** JUnit 5, Spring Boot test support, MockMvc, Mockito.
+The full Vapi assistant example, system prompt, JSON schemas, expected response shapes, and Custom Credential setup are in [`docs/vapi-agent.md`](docs/vapi-agent.md).
 
-## Database overview
+## Backend API
 
-The application uses three JPA entities/tables with foreign keys to `customers`:
+All routes except health and the Vapi webhook require `X-API-Key`. The webhook uses `X-Vapi-Webhook-Secret` instead. Tool calls return normal JSON DTOs on success and `{ "code", "message" }` JSON errors for invalid tools/arguments and tool execution failures.
 
-- **`customers`** stores a fictional customer name/phone, amount due, payment status, failure reason, and creation time.
-- **`calls`** stores the customer relationship, Vapi call ID, start/end timestamps, duration, call status, and optional recovery outcome.
-- **`recovery_actions`** stores customer-linked callback, support escalation, and recorded outcome activity, including status, optional callback time/details, and creation time.
+| Method | Endpoint | Purpose |
+|---|---|---|
+| `GET` | `/api/health` | Public health response: `{ "status": "UP" }`. |
+| `GET` | `/api/customers` | List customer records. |
+| `GET` | `/api/customers/{id}` | Get one customer by ID. |
+| `GET` | `/api/customers/phone/{phone}` | Find a customer by phone. |
+| `GET` | `/api/payments/{customerId}` | Read mock payment status. |
+| `POST` | `/api/payments/{customerId}/retry` | Simulate a mock retry. |
+| `POST` | `/api/payments/{customerId}/link` | Generate a fictional payment URL. |
+| `POST` | `/api/calls/outbound/{customerId}` | Create a call record and request a Vapi outbound call. |
+| `GET` | `/api/calls` | Recent call summaries for the dashboard. |
+| `GET` | `/api/recovery-actions` | Recent recovery actions. |
+| `GET` | `/api/metrics` | Metrics calculated from persisted call and action rows. |
+| `POST` | `/api/tools/vapi/{toolName}` | Validate and dispatch one of the seven tool names above. |
+| `POST` | `/api/webhooks/vapi` | Process supported Vapi call lifecycle messages. |
 
-The dashboard endpoints return summary DTOs rather than exposing full JPA entities. Hibernate is configured with `spring.jpa.hibernate.ddl-auto=update` for this local demo; no migration framework is currently included. Database credentials are provided through environment variables and are not part of the schema or source code.
+`/api/tools/vapi/{toolName}` accepts direct JSON arguments, not Vapi's Function Tool `tool-calls` envelope. Invalid arguments and unknown tool names return HTTP 400 JSON; missing customers return HTTP 404 JSON on the adapter; unexpected adapter errors return HTTP 500 JSON. The legacy customer/payment controllers use the API's existing error handling, so their 404 body is plain text.
 
 ## Dashboard
 
-The dashboard is served by Vite at `http://localhost:5173` in development. It shows:
+The dashboard is a React/TypeScript/Vite app hosted separately from the API. It displays system health, calls, completed calls, recovery rate, average duration, payment links, escalations, the fictional customer list, recent calls, and recovery activity. The metrics are computed by the backend from database rows; the page refreshes periodically and has a manual refresh action.
 
-- Backend/system health from `GET /api/health`.
-- Total calls, completed calls, recovery rate, average call duration, payment links sent, and escalations from `GET /api/metrics`.
-- Customer name, amount due, payment status, and failure reason from `GET /api/customers`.
-- Recent calls with status, outcome, duration, and start time from `GET /api/calls`.
-- Recent recorded recovery actions from `GET /api/recovery-actions`.
-- A **Start recovery call** action backed by `POST /api/calls/outbound/{customerId}`, with loading/success/error feedback.
+![Screenshot of the live PayFlow dashboard showing backend status, backend-derived metrics, ten fictional customers, recent calls, and recovery activity.](docs/images/dashboard.png)
 
-Metric definitions: recovery rate is calls with outcome `RECOVERED` among calls with status `COMPLETED` (zero when no calls completed); average duration is the rounded mean of calls with a recorded duration; payment links sent count recovery actions whose status is `PAYMENT_LINK_SENT`; escalations count actions of type `SUPPORT_ESCALATION`.
+The screenshot is an actual capture of the deployed dashboard, not a mockup. Its call history and metric values are a point-in-time demo snapshot and will change as the shared demo database changes.
 
-The backend allows browser CORS requests from `http://localhost:5173` and `http://127.0.0.1:5173` by default. Set `CORS_ALLOWED_ORIGINS` to change the permitted browser origins.
+## Database design
 
-## Safety and privacy assumptions
+![Entity relationship diagram for customers, calls, and recovery_actions.](docs/images/database-erd.svg)
 
-- All seeded names, phone numbers, payment statuses, and activity are fictional demo data.
-- Payment attempts are simulated locally. Generated checkout URLs use a reserved demo domain and do not process payment.
-- The voice agent must never request card numbers, CVV, PINs, passwords, bank credentials, or one-time passcodes.
-- Vapi API keys and database credentials belong in an ignored local `.env` file or a deployment secret store. Never commit them or paste them into prompts, tool arguments, or logs.
-- Application APIs require `X-API-Key`; the Vapi webhook requires the separate `X-Vapi-Webhook-Secret`. `/api/health` is public. The dashboard key is bundled into the browser build and is visible to users, so this shared-key gate is suitable only for a controlled demo; use a server-side proxy or real user authentication before exposing customer data publicly.
-- Do not use real customer information or enable outbound calling to real phone numbers for this assignment demo.
+The JPA entities map to three tables:
 
-## Local setup and environment variables
+- **`customers`** has a unique phone, amount due, string-backed payment status and failure reason, and creation time.
+- **`calls`** references a customer and stores a unique Vapi call ID, start/end times, duration, call status, and optional recovery outcome.
+- **`recovery_actions`** references a customer and stores action type/status, optional callback time/details, and creation time.
 
-Prerequisites: JDK 21, Docker Desktop with Docker Compose, and Node.js/npm compatible with the locked Vite toolchain.
+All foreign keys point to `customers.id`. The application uses identity-generated `BIGINT` IDs. Enum values are persisted as strings. `CustomerDataInitializer` inserts the ten fictional customers only when the customer table is empty.
 
-Create a local environment file from the safe template:
+Local development uses Hibernate `ddl-auto=update`. The production `prod` profile uses `ddl-auto=validate`: it expects the schema to exist before the app starts and does not create or migrate production tables. There is no migration runner configured in Spring Boot.
 
-```powershell
-Copy-Item .env.example .env
-```
+## AI guardrails and security
 
-The root `.env.example` lists the supported variables without real credentials:
+The Vapi system prompt instructs the assistant to identify as automated, use tool-returned demo information, avoid sensitive credentials, check payment state before a retry, respect refusal/callback requests, avoid unsupported success claims, and record outcomes. The prompt is not a substitute for authorization or backend enforcement.
 
-| Variable | Purpose |
-|---|---|
-| `DB_NAME` | Local PostgreSQL database name. |
-| `DB_PORT` | Host port published by Docker Compose and used by Spring Boot. |
-| `DB_USERNAME` | Local PostgreSQL username. |
-| `DB_PASSWORD` | Local PostgreSQL password; replace the development placeholder locally. |
-| `DB_URL` | Optional full JDBC URL locally; required in the `prod` profile. |
-| `API_KEY` | Shared key required by protected application routes. |
-| `VAPI_WEBHOOK_SECRET` | Separate credential required by the Vapi webhook. |
-| `PORT` | Optional HTTP listener port supplied by platforms such as Render; defaults to `8080`. |
-| `VAPI_API_KEY` | Optional Vapi server API key for outbound call creation. Keep the real value secret. |
-| `VAPI_BASE_URL` | Vapi API base URL. |
-| `VAPI_ASSISTANT_ID` | Assistant identifier used for outbound calls. |
-| `VAPI_PHONE_NUMBER_ID` | Vapi phone-number identifier used for outbound calls. |
-| `CORS_ALLOWED_ORIGINS` | Comma-separated browser origins; defaults to the two local Vite origins. |
+- **Payment behavior:** `MockPaymentService` randomly returns `SUCCESS`, `FAILED`, or `PENDING`; there is no payment provider. A generated link uses a reserved `.example` domain.
+- **API access:** a shared `API_KEY` is checked using the `X-API-Key` header on protected `/api/**` routes. `/api/health` is public; `OPTIONS` preflight is allowed.
+- **Webhook access:** `/api/webhooks/vapi` checks a separate `VAPI_WEBHOOK_SECRET` in `X-Vapi-Webhook-Secret`. This is a shared header value, not Vapi request-signature/HMAC verification.
+- **CORS:** browser origins are controlled by `CORS_ALLOWED_ORIGINS`; CORS is not authentication.
+- **Browser key limitation:** `VITE_API_KEY` is included in the frontend bundle and is observable by dashboard users. It is suitable only as a demo gate, not a secret or per-user authorization system.
+- **Customer identity:** the outbound backend supplies the customer ID to Vapi call context; the tool adapter still accepts a `customerId` argument and checks that it exists. Conversational identity confirmation is prompt guidance, not a verified identity system.
+- **Data:** use only the fictional seeded records. Do not enable real outbound calls or put secrets in source, docs, frontend variables other than the demo API key, or screenshots.
 
-The frontend may use `frontend/.env` copied from `frontend/.env.example` to set `VITE_API_BASE_URL` and `VITE_API_KEY`. In development the API URL defaults to `http://localhost:8080`; production builds default to same-origin. `VITE_API_KEY` is included in browser code and is not a secret. For deployment, place the frontend behind a server-side proxy or protect it with real user authentication. Production backend deployment must set `SPRING_PROFILES_ACTIVE=prod`, `DB_URL`, `DB_USERNAME`, `DB_PASSWORD`, `PORT`, `CORS_ALLOWED_ORIGINS`, `API_KEY`, and `VAPI_WEBHOOK_SECRET`; outbound calls also need the VAPI variables listed above.
+## Deployment
 
-## Run the backend and frontend
+![Vercel, Railway, Supabase, and Vapi deployment paths.](docs/images/deployment-architecture.svg)
 
-From the repository root, start PostgreSQL and the backend:
+- **Vercel** serves the Vite frontend. Set `VITE_API_BASE_URL` to the Railway backend origin and `VITE_API_KEY` to the same shared key expected by the backend.
+- **Railway** builds the repository-root [Dockerfile](Dockerfile), which uses a Maven/Temurin 21 build stage and a Java 21 JRE runtime stage. It sets `SPRING_PROFILES_ACTIVE=prod` and the app listens on Railway's `PORT`.
+- **Supabase** hosts PostgreSQL. Provide a JDBC URL and credentials to the backend. Initialize the tables before the first `prod` startup because Hibernate validates rather than creates them.
+- **Vapi** calls the public HTTPS tool routes with a Custom Credential carrying `X-API-Key`; configure the call lifecycle server URL as `https://autopay-recovery-agent-production.up.railway.app/api/webhooks/vapi` with the separate webhook header credential.
 
-```powershell
-docker compose up -d postgres
-docker compose ps
-.\mvnw.cmd clean package
-java -jar target/autopay-recovery-0.0.1-SNAPSHOT.jar
-```
+The deployed service links are provided for assignment review. Provider configuration and availability can change independently of this repository.
 
-In a second PowerShell window:
+## Local development
 
-```powershell
-cd frontend
-Copy-Item .env.example .env
-npm ci
-npm run dev
-```
+Prerequisites: Java 21, Docker Compose, and Node.js/npm.
 
-Open the Vite URL shown in the terminal (normally `http://localhost:5173`). The API is available at `http://localhost:8080`. Verify the backend with:
+1. From the repository root, create the local environment files and replace the placeholder shared-key values with local random strings:
 
-```powershell
-$apiKey = (Select-String -Path .env -Pattern '^API_KEY=').Line.Substring(8)
-Invoke-RestMethod http://localhost:8080/api/health
-Invoke-RestMethod http://localhost:8080/api/customers -Headers @{ "X-API-Key" = $apiKey }
-Invoke-RestMethod http://localhost:8080/api/metrics -Headers @{ "X-API-Key" = $apiKey }
-```
+   ```powershell
+   Copy-Item .env.example .env
+   Copy-Item frontend/.env.example frontend/.env
+   ```
 
-Outbound Vapi calling requires valid Vapi configuration and a reachable Vapi assistant/phone number. A Vapi-hosted service cannot reach a developer’s `localhost` URL; configure an HTTPS-reachable backend endpoint before attempting a real Vapi call. No tunnel or cloud deployment is included here.
+2. Start PostgreSQL and the backend from the repository root:
+
+   ```powershell
+   docker compose up -d postgres
+   .\mvnw.cmd spring-boot:run
+   ```
+
+   The local database defaults to `localhost:5434/autopay_recovery`. The default Spring profile uses `ddl-auto=update` for local schema setup.
+
+3. Set `VITE_API_BASE_URL=http://localhost:8080` and `VITE_API_KEY` to the same value as `API_KEY` in `frontend/.env`, then start the dashboard:
+
+   ```powershell
+   cd frontend
+   npm ci
+   npm run dev
+   ```
+
+The local dashboard is normally at `http://localhost:5173`; the backend defaults to `http://localhost:8080`. Outbound calling also requires the Vapi variables listed below. Without them, the API remains usable but outbound call creation cannot complete.
+
+## Environment variables
+
+Do not commit `.env` files or real credentials. Backend variables are read from the process environment and the optional root `.env` file. Vite variables are build-time frontend configuration.
+
+| Variable | Used by | Purpose / local default |
+|---|---|---|
+| `DB_URL` | Backend | Optional full JDBC URL; otherwise assembled from `DB_PORT`, `DB_NAME`. Production requires it. |
+| `DB_NAME` | Compose/backend | Local database name; default `autopay_recovery`. |
+| `DB_PORT` | Compose/backend | Local host port; default `5434`. |
+| `DB_USERNAME` | Compose/backend | Local default `postgres`; supply deployment credential in production. |
+| `DB_PASSWORD` | Compose/backend | Local development default `postgres`; replace for local use and supply a secret in production. |
+| `PORT` | Backend | HTTP port; default `8080`, supplied by Railway in deployment. |
+| `SPRING_PROFILES_ACTIVE` | Backend | Use `prod` on Railway; the Dockerfile sets this profile. |
+| `API_KEY` | Backend | Shared application API key; no real value is stored in the repo. |
+| `VAPI_WEBHOOK_SECRET` | Backend/Vapi | Separate shared value for the Vapi lifecycle webhook header. |
+| `CORS_ALLOWED_ORIGINS` | Backend | Comma-separated browser origins; local Vite origins are the default. |
+| `VAPI_API_KEY` | Backend | Server-side Vapi API credential for outbound call creation. |
+| `VAPI_BASE_URL` | Backend | Vapi API base URL; defaults to `https://api.vapi.ai`. |
+| `VAPI_ASSISTANT_ID` | Backend | Vapi assistant to use for outbound calls. |
+| `VAPI_PHONE_NUMBER_ID` | Backend | Vapi phone-number resource used for outbound calls. |
+| `VITE_API_BASE_URL` | Frontend | Backend origin; local dev defaults to `http://localhost:8080`. Set to Railway origin for Vercel. |
+| `VITE_API_KEY` | Frontend | Shared key sent in browser API requests. It is public in the built assets; use only for the demo. |
+
+For production, set `DB_URL`, `DB_USERNAME`, `DB_PASSWORD`, `API_KEY`, `VAPI_WEBHOOK_SECRET`, `PORT`, `CORS_ALLOWED_ORIGINS`, `SPRING_PROFILES_ACTIVE=prod`, and frontend build values `VITE_API_BASE_URL`, `VITE_API_KEY`. Outbound Vapi calls additionally require `VAPI_API_KEY`, `VAPI_ASSISTANT_ID`, and `VAPI_PHONE_NUMBER_ID`.
 
 ## Testing
 
-Backend tests and package build:
+Backend verification and tests:
 
 ```powershell
-.\mvnw.cmd clean package
+.\mvnw.cmd clean verify
 ```
 
-Frontend production build:
+Frontend dependency installation and production build:
 
 ```powershell
 cd frontend
@@ -213,25 +198,58 @@ npm ci
 npm run build
 ```
 
-Backend tests cover application startup, recovery services, Vapi webhook lifecycle and credential handling, call-race reconciliation, health response, shared-key authentication, dashboard metric calculation, and Vapi tool input/error handling. No live Vapi call is part of the automated test suite.
+The current backend suite has **29 test cases** across application startup, API and webhook authentication, health response, dashboard metrics, Vapi tool dispatch/input errors, Vapi webhook reconciliation, and call/recovery services. No automated test makes a live Vapi call. The frontend build runs TypeScript project checks before Vite production bundling; there is no frontend unit-test script in `package.json`.
+
+## Engineering decisions
+
+- **Modular monolith:** one Spring Boot application keeps the assignment easy to run while separating controllers, tools, services, repositories, and provider integrations.
+- **Backend-owned behavior:** the Vapi adapter calls existing Java tools, and tools delegate to services instead of embedding payment rules in HTTP or prompt code.
+- **Explicit records:** calls and recovery actions are persisted separately from customers so dashboard history and webhook updates are inspectable.
+- **Call reconciliation:** Vapi metadata carries the selected customer context; webhook matching does not guess a customer when metadata is absent, and terminal local call states are preserved against late status events.
+- **Production schema validation:** `ddl-auto=validate` catches an uninitialized or mismatched production schema at startup instead of silently generating production DDL.
 
 ## Known limitations
 
-- Payment retries return a randomized mock result (`SUCCESS`, `FAILED`, or `PENDING`); no bank or payment provider is contacted.
-- A generated payment link is fictional and is not payable.
-- The outbound-call UI requires working Vapi credentials and phone/assistant configuration; there is no local voice simulation.
-- The Vapi webhook handles the call event shapes currently modeled by the backend; it is not a general Vapi event processor.
-- Dashboard calls/actions are unpaginated demo lists; metrics are calculated over the available database records.
-- Customer identity verification and live human handoff are not implemented. The shared API key is a demo-level access gate; it does not provide per-user authorization.
-- The local PostgreSQL compose volume persists demo data across application restarts.
+- Payment attempts are random mock outcomes; payment links cannot be paid.
+- Callback scheduling records a requested time but does not enqueue or place a future call.
+- Escalation is recorded; there is no live human transfer or support queue.
+- The system prompt expresses consent, disclosure, and refusal rules, but the backend does not independently enforce all conversational sequencing.
+- The webhook handles the event types mapped in `VapiWebhookService`; it is not a general Vapi event processor and does not verify request signatures.
+- The dashboard and demo API share one API key; there are no per-user roles, customer authorization boundaries, or rate limits.
+- Production table creation is an operator/database setup step; no Flyway/Liquibase migration runner is wired into application startup.
+- Dashboard queries return unpaginated data and calculate metrics from loaded rows.
 
 ## Production improvements
 
-- Replace the demo shared API key with user authentication, role authorization, rate limiting, audit controls, and secure service-to-service credentials.
-- Replace the mock payment component with a compliant payment-provider integration and a verified payment status source.
-- Add consent management, customer verification, opt-out handling, retention rules, and protections for sensitive data.
-- Use database migrations, validated configuration, production secrets management, and separate development/test/production environments.
-- Add pagination, filtering, indexes, query-level metric aggregation, observability, and operational alerts.
-- Complete Vapi webhook signature validation, idempotency, delivery retry handling, and robust event mapping.
-- Add integration tests for PostgreSQL, contract tests for Vapi/API payloads, and frontend component/end-to-end tests.
-- Configure trusted HTTPS hosting and a reviewed Vapi-accessible backend endpoint before enabling real calls.
+Before using real customers or payment methods, replace the mock payment implementation with an audited provider integration; add user authentication and authorization, rate limiting, secret rotation, signed webhook verification and idempotency; implement consent, opt-out, and customer verification as backend controls; add versioned migrations, audit logs, monitoring, alerting, retention rules, pagination, and provider contract tests. Move dashboard API access behind a server-side proxy or user session so no shared API key is shipped to browsers.
+
+## Project structure
+
+```text
+.
+├── src/main/java/com/razorpay/autopay/
+│   ├── config/             # API key, CORS, demo customer initialization
+│   ├── controller/         # REST APIs, Vapi adapter/webhook, dashboard
+│   ├── dto/                # HTTP request/response shapes
+│   ├── entity/             # Customer, Call, RecoveryAction
+│   ├── integration/        # Mock payment and Vapi provider boundaries
+│   ├── repository/         # Spring Data JPA persistence
+│   ├── service/            # Customer, payment, recovery, call behavior
+│   └── tool/               # Customer, payment, recovery, support tools
+├── src/test/java/          # Backend test suite
+├── frontend/src/           # React dashboard
+├── docs/
+│   ├── images/             # Architecture, flow, ERD, deployment, screenshot
+│   └── vapi-agent.md       # Assistant prompt, API Request schemas, scenarios
+├── Dockerfile              # Java 21 multi-stage backend image
+├── docker-compose.yml      # Local PostgreSQL
+└── pom.xml                 # Maven backend build
+```
+
+## Demo links
+
+- [Live PayFlow dashboard](https://autopay-recovery-agent.vercel.app/)
+- [Backend health endpoint](https://autopay-recovery-agent-production.up.railway.app/api/health)
+- [Vapi assistant and tool contract](docs/vapi-agent.md)
+
+The AI is responsible for a concise, respectful conversation. The backend is responsible for the data, validation, and recovery operations behind that conversation.

@@ -1,0 +1,26 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1320" height="520" viewBox="0 0 1320 520" role="img" aria-labelledby="title desc">
+  <title id="title">Vapi agent tool execution flow</title>
+  <desc id="desc">Conversation context is interpreted by the Vapi model, which sends a direct JSON API Request with the trusted customer ID and API key to the Spring Boot adapter. The adapter validates and dispatches to an existing Java tool and service, which persists data through JPA; the JSON result returns to the agent.</desc>
+  <defs><marker id="a" markerWidth="10" markerHeight="10" refX="8" refY="5" orient="auto"><path d="M0 0 10 5 0 10Z" fill="#52756b"/></marker><marker id="b" markerWidth="10" markerHeight="10" refX="8" refY="5" orient="auto"><path d="M0 0 10 5 0 10Z" fill="#5576a8"/></marker>
+    <style>text{font-family:Inter,ui-sans-serif,system-ui,-apple-system,"Segoe UI",sans-serif;fill:#172b27}.title{font-size:27px;font-weight:700}.sub{font-size:14px;fill:#62746f}.label{font-size:15px;font-weight:700}.small{font-size:12px;fill:#60716d}.tiny{font-size:11px;fill:#60716d}.node{fill:#fff;stroke:#dce7e2;stroke-width:1.5}.green{fill:#e6f4ec;stroke:#c6e8d7;stroke-width:1.5}.blue{fill:#edf3fb;stroke:#d4e0f0;stroke-width:1.5}.line{fill:none;stroke:#52756b;stroke-width:2.3;marker-end:url(#a)}.return{fill:none;stroke:#5576a8;stroke-width:2.2;stroke-dasharray:7 6;marker-end:url(#b)}</style>
+  </defs>
+  <rect width="1440" height="520" rx="24" fill="#f6f8f7"/>
+  <text x="52" y="62" class="title">Agent tool execution</text>
+  <text x="52" y="88" class="sub">The model selects a tool; it does not receive database credentials or execute payment logic itself.</text>
+
+  <rect x="44" y="190" width="178" height="126" rx="16" class="node"/><text x="133" y="231" text-anchor="middle" class="label">Voice conversation</text><text x="133" y="258" text-anchor="middle" class="small">Customer intent + answers</text><text x="133" y="281" text-anchor="middle" class="small">Refusal / consent signals</text>
+  <rect x="258" y="190" width="180" height="126" rx="16" class="blue"/><text x="348" y="231" text-anchor="middle" class="label">Vapi model</text><text x="348" y="258" text-anchor="middle" class="small">Follows prompt constraints</text><text x="348" y="281" text-anchor="middle" class="small">Chooses a configured action</text>
+  <rect x="474" y="190" width="208" height="126" rx="16" class="blue"/><text x="578" y="231" text-anchor="middle" class="label">Vapi API Request</text><text x="578" y="258" text-anchor="middle" class="small">POST /api/tools/vapi/{toolName}</text><text x="578" y="281" text-anchor="middle" class="small">JSON args + X-API-Key</text>
+  <rect x="718" y="190" width="194" height="126" rx="16" class="green"/><text x="815" y="231" text-anchor="middle" class="label">HTTP adapter</text><text x="815" y="258" text-anchor="middle" class="small">Validates arguments</text><text x="815" y="281" text-anchor="middle" class="small">Dispatches by tool name</text>
+  <rect x="948" y="190" width="150" height="126" rx="16" class="node"/><text x="1023" y="231" text-anchor="middle" class="label">Java tool</text><text x="1023" y="258" text-anchor="middle" class="small">Existing tool bean</text><text x="1023" y="281" text-anchor="middle" class="small">No duplicated logic</text>
+  <rect x="1132" y="190" width="148" height="126" rx="16" class="node"/><text x="1206" y="231" text-anchor="middle" class="label">Service layer</text><text x="1206" y="258" text-anchor="middle" class="small">Backend business logic</text><text x="1206" y="281" text-anchor="middle" class="small">No payment provider</text>
+  <path d="M222 253h28M438 253h28M682 253h28M912 253h28M1098 253h28" class="line"/>
+
+  <rect x="1004" y="378" width="280" height="76" rx="14" class="node"/><text x="1144" y="410" text-anchor="middle" class="label">JPA repository → PostgreSQL</text><text x="1144" y="433" text-anchor="middle" class="small">Persist/read only the needed records</text>
+  <path d="M1206 316v28h-62v26" class="line"/>
+  <path d="M718 286V350H696V368H578V324" class="return"/>
+  <text x="646" y="389" text-anchor="middle" class="tiny">Structured JSON result or { code, message } error returns to Vapi</text>
+  <text x="44" y="410" class="tiny">Customer ID comes from trusted outbound-call context (autopayCustomerId), not from a model-generated ID.</text>
+  <text x="44" y="434" class="tiny">Lifecycle events use POST /api/webhooks/vapi with X-Vapi-Webhook-Secret.</text>
+  <text x="44" y="476" class="small">Prompt rules guide the conversation; input validation and service operations remain on the backend.</text>
+</svg>

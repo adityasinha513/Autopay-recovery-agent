@@ -1,6 +1,6 @@
 # Autopay Recovery Assistant (Vapi)
 
-This document defines a Vapi assistant for the fictional/demo autopay recovery application and the HTTP tool adapter at `POST /api/tools/vapi/{toolName}`.
+This document defines a Vapi assistant for the fictional/demo autopay recovery application and the HTTP tool adapter at `POST /api/tools/vapi/{toolName}`. For the system topology and the tool request path, see the [architecture diagram](images/system-architecture.svg) and [tool execution flow](images/agent-tool-flow.svg) in the [project README](../README.md).
 
 ## Important integration boundary
 

@@ -1,0 +1,32 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1320" height="680" viewBox="0 0 1320 680" role="img" aria-labelledby="title desc">
+  <title id="title">Autopay Recovery Agent deployment architecture</title>
+  <desc id="desc">The React Vite dashboard is deployed to Vercel and makes authenticated requests to the Spring Boot backend on Railway. Railway builds the root Java 21 Dockerfile, starts with the prod profile, and connects to Supabase PostgreSQL. Vapi calls the backend API Request tools and posts lifecycle webhooks to it.</desc>
+  <defs><marker id="a" markerWidth="10" markerHeight="10" refX="8" refY="5" orient="auto"><path d="M0 0 10 5 0 10Z" fill="#52756b"/></marker><marker id="b" markerWidth="10" markerHeight="10" refX="8" refY="5" orient="auto"><path d="M0 0 10 5 0 10Z" fill="#5576a8"/></marker>
+    <style>text{font-family:Inter,ui-sans-serif,system-ui,-apple-system,"Segoe UI",sans-serif;fill:#172b27}.title{font-size:27px;font-weight:700}.sub{font-size:14px;fill:#62746f}.label{font-size:17px;font-weight:700}.small{font-size:13px;fill:#60716d}.tiny{font-size:11px;fill:#60716d}.box{fill:#fff;stroke:#dce7e2;stroke-width:1.5}.blue{fill:#edf3fb;stroke:#d4e0f0;stroke-width:1.5}.green{fill:#e6f4ec;stroke:#c6e8d7;stroke-width:1.5}.edge{fill:none;stroke:#52756b;stroke-width:2.5;marker-end:url(#a)}.webhook{fill:none;stroke:#5576a8;stroke-width:2.3;stroke-dasharray:7 6;marker-end:url(#b)}</style>
+  </defs>
+  <rect width="1320" height="680" rx="24" fill="#f6f8f7"/>
+  <text x="52" y="62" class="title">Deployment architecture</text>
+  <text x="52" y="88" class="sub">Independent frontend, application, voice-provider, and managed-database services connected over HTTPS.</text>
+
+  <rect x="60" y="180" width="306" height="190" rx="20" class="box"/>
+  <rect x="60" y="180" width="306" height="48" rx="20" fill="#172b27"/><path d="M60 208h306v20H60z" fill="#172b27"/><text x="86" y="211" fill="#fff" style="fill:#fff;font-size:15px;font-weight:700">VERCEL · FRONTEND</text>
+  <text x="88" y="271" class="label">React dashboard</text><text x="88" y="299" class="small">Vite production build · static assets</text><text x="88" y="324" class="small">VITE_API_BASE_URL + X-API-Key</text><text x="88" y="349" class="tiny">Browser-held shared key is visible to users.</text>
+
+  <rect x="510" y="138" width="324" height="280" rx="20" class="green"/>
+  <rect x="510" y="138" width="324" height="48" rx="20" fill="#24604f"/><path d="M510 166h324v20H510z" fill="#24604f"/><text x="536" y="169" style="fill:#fff;font-size:15px;font-weight:700">RAILWAY · BACKEND</text>
+  <text x="540" y="229" class="label">Spring Boot · Java 21</text><text x="540" y="257" class="small">Root multi-stage Dockerfile</text><text x="540" y="282" class="small">SPRING_PROFILES_ACTIVE=prod</text><text x="540" y="307" class="small">Listens on PORT</text><text x="540" y="346" class="small">REST APIs + Vapi tools + webhook</text><text x="540" y="372" class="tiny">Production schema must exist: ddl-auto=validate</text><text x="540" y="395" class="tiny">Secrets supplied by deployment environment.</text>
+
+  <rect x="956" y="180" width="306" height="190" rx="20" class="box"/>
+  <rect x="956" y="180" width="306" height="48" rx="20" fill="#315b80"/><path d="M956 208h306v20H956z" fill="#315b80"/><text x="982" y="211" style="fill:#fff;font-size:15px;font-weight:700">SUPABASE · DATABASE</text>
+  <text x="984" y="271" class="label">PostgreSQL</text><text x="984" y="299" class="small">customers · calls · recovery_actions</text><text x="984" y="324" class="small">DB_URL · DB_USERNAME · DB_PASSWORD</text><text x="984" y="349" class="tiny">Schema initialization precedes app startup.</text>
+
+  <rect x="510" y="492" width="324" height="112" rx="18" class="blue"/><text x="672" y="529" text-anchor="middle" class="label">Vapi</text><text x="672" y="554" text-anchor="middle" class="small">Outbound voice · API Request tools</text><text x="672" y="578" text-anchor="middle" class="small">Call lifecycle webhook events</text>
+
+  <path d="M366 276h136" class="edge"/><text x="432" y="260" text-anchor="middle" class="tiny">HTTPS API calls</text>
+  <path d="M834 276h114" class="edge"/><text x="890" y="260" text-anchor="middle" class="tiny">JDBC + TLS</text>
+  <path d="M672 492V428" class="edge"/><text x="695" y="465" class="tiny">tool requests / calls</text>
+  <path d="M650 492V446H694V428" class="webhook"/><text x="524" y="463" class="tiny">status webhooks</text>
+
+  <text x="60" y="644" class="small">Local development: Docker Compose PostgreSQL · Spring Boot default profile · Vite dev server.</text>
+  <text x="60" y="662" class="tiny">Hosting services and links are assignment deployment context; availability depends on their current provider configuration.</text>
+</svg>

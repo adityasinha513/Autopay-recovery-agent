@@ -1,0 +1,49 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1320" height="660" viewBox="0 0 1320 660" role="img" aria-labelledby="title desc">
+  <title id="title">Autopay Recovery Agent database entity relationship diagram</title>
+  <desc id="desc">The customers table has one-to-many relationships to calls and recovery_actions. Calls store the Vapi call ID, lifecycle timestamps, duration, status and optional recovery outcome. Recovery actions store action type, status, callback time, details and creation time.</desc>
+  <defs><marker id="a" markerWidth="10" markerHeight="10" refX="8" refY="5" orient="auto"><path d="M0 0 10 5 0 10Z" fill="#52756b"/></marker>
+    <style>text{font-family:Inter,ui-sans-serif,system-ui,-apple-system,"Segoe UI",sans-serif;fill:#172b27}.title{font-size:27px;font-weight:700}.sub{font-size:14px;fill:#62746f}.table{fill:#fff;stroke:#dce7e2;stroke-width:1.5}.head{fill:#172b27}.htext{font-size:16px;font-weight:700;fill:#fff}.col{font-family:ui-monospace,SFMono-Regular,Consolas,monospace;font-size:12px}.meta{font-size:11px;fill:#60716d}.line{fill:none;stroke:#52756b;stroke-width:2.5;marker-end:url(#a)}.label{font-size:12px;fill:#60716d}</style>
+  </defs>
+  <rect width="1320" height="660" rx="24" fill="#f6f8f7"/>
+  <text x="52" y="62" class="title">Database model</text>
+  <text x="52" y="88" class="sub">Three JPA entities · PostgreSQL · foreign keys preserve customer ownership for calls and recovery actions.</text>
+
+  <rect x="62" y="144" width="344" height="400" rx="15" class="table"/>
+  <path d="M62 159a15 15 0 0 1 15-15h314a15 15 0 0 1 15 15v46H62z" class="head"/>
+  <text x="86" y="180" class="htext">customers</text><text x="86" y="197" class="meta" style="fill:#c7d8d1">Fictional customer + payment state</text>
+  <text x="86" y="237" class="col">id              BIGINT · PK · identity</text>
+  <text x="86" y="271" class="col">name            VARCHAR(255) · required</text>
+  <text x="86" y="305" class="col">phone           VARCHAR(255) · unique</text>
+  <text x="86" y="339" class="col">amount_due      NUMERIC(38,2) · required</text>
+  <text x="86" y="373" class="col">payment_status  enum string · required</text>
+  <text x="86" y="407" class="col">failure_reason  enum string · nullable</text>
+  <text x="86" y="441" class="col">created_at      TIMESTAMP · required</text>
+
+  <rect x="512" y="120" width="354" height="446" rx="15" class="table"/>
+  <path d="M512 135a15 15 0 0 1 15-15h324a15 15 0 0 1 15 15v46H512z" class="head"/>
+  <text x="536" y="156" class="htext">calls</text><text x="536" y="173" class="meta" style="fill:#c7d8d1">Vapi call lifecycle + recovery outcome</text>
+  <text x="536" y="213" class="col">id              BIGINT · PK · identity</text>
+  <text x="536" y="247" class="col">customer_id     BIGINT · FK → customers.id</text>
+  <text x="536" y="281" class="col">vapi_call_id    VARCHAR(255) · unique</text>
+  <text x="536" y="315" class="col">started_at      TIMESTAMP · required</text>
+  <text x="536" y="349" class="col">ended_at        TIMESTAMP · nullable</text>
+  <text x="536" y="383" class="col">duration_seconds BIGINT · nullable</text>
+  <text x="536" y="417" class="col">status          CallStatus · enum string</text>
+  <text x="536" y="451" class="col">outcome         RecoveryOutcome · nullable</text>
+  <text x="536" y="517" class="meta">customer foreign key · unique Vapi call ID</text>
+
+  <rect x="964" y="144" width="300" height="400" rx="15" class="table"/>
+  <path d="M964 159a15 15 0 0 1 15-15h270a15 15 0 0 1 15 15v46H964z" class="head"/>
+  <text x="988" y="180" class="htext">recovery_actions</text><text x="988" y="197" class="meta" style="fill:#c7d8d1">Callbacks, outcomes, escalation records</text>
+  <text x="988" y="237" class="col">id           BIGINT · PK · identity</text>
+  <text x="988" y="271" class="col">customer_id  BIGINT · FK → customers.id</text>
+  <text x="988" y="305" class="col">action_type  VARCHAR(255) · required</text>
+  <text x="988" y="339" class="col">status       VARCHAR(255) · required</text>
+  <text x="988" y="373" class="col">callback_time TIMESTAMP · nullable</text>
+  <text x="988" y="407" class="col">details      VARCHAR(255) · nullable</text>
+  <text x="988" y="441" class="col">created_at   TIMESTAMP · required</text>
+
+  <path d="M406 318h98" class="line"/><text x="455" y="305" text-anchor="middle" class="label">1 → many</text>
+  <path d="M406 492V584H940V430H956" class="line"/><text x="676" y="578" text-anchor="middle" class="label">1 → many</text>
+  <text x="62" y="610" class="meta">Enum values are stored as strings. Keys, uniqueness, and foreign-key relationships follow the current JPA entity mappings.</text>
+</svg>
