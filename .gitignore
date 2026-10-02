@@ -1,0 +1,69 @@
+HELP.md
+target/
+**/target/
+.mvn/wrapper/maven-wrapper.jar
+
+# Local environment, credentials, and secret material
+.env
+.env.*
+!.env.example
+!**/.env.example
+*.pem
+*.key
+*.p12
+*.pfx
+*.jks
+*.keystore
+secrets/
+**/secrets/
+
+# Frontend dependencies and generated assets
+node_modules/
+**/node_modules/
+frontend/dist/
+coverage/
+**/coverage/
+.vite/
+**/.vite/
+
+# Logs and local runtime files
+*.log
+logs/
+**/logs/
+*.pid
+*.pid.lock
+*.dump
+*.stackdump
+
+# Operating system files
+.DS_Store
+Thumbs.db
+Desktop.ini
+
+### STS ###
+.apt_generated
+.classpath
+.factorypath
+.project
+.settings
+.springBeans
+.sts4-cache
+
+### IntelliJ IDEA ###
+.idea
+*.iws
+*.iml
+*.ipr
+
+### NetBeans ###
+/nbproject/private/
+/nbbuild/
+/dist/
+/nbdist/
+/.nb-gradle/
+build/
+!**/src/main/**/build/
+!**/src/test/**/build/
+
+### VS Code ###
+.vscode/

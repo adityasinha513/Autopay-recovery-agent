@@ -1,0 +1,65 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  color: #17212f;
+  background: #f5f7fa;
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  font-optical-sizing: auto;
+}
+
+* { box-sizing: border-box; }
+html { scroll-behavior: smooth; }
+body { margin: 0; min-width: 320px; min-height: 100vh; }
+button, a { -webkit-tap-highlight-color: transparent; }
+button { font: inherit; }
+
+.nav-link { display:flex; align-items:center; gap:.8rem; border-radius:.75rem; padding:.72rem .8rem; color:rgba(255,255,255,.57); font-size:.84rem; font-weight:550; transition:background-color .15s,color .15s; }
+.nav-link svg { width:1.1rem; height:1.1rem; }
+.nav-link:hover { background:rgba(255,255,255,.07); color:white; }
+.nav-link-active { background:rgba(206,239,222,.13); color:#d4f3e1; }
+.health-pill { display:inline-flex; align-items:center; gap:.55rem; border:1px solid #e5ebea; border-radius:9999px; background:white; padding:.62rem .85rem; font-size:.75rem; font-weight:600; color:#475569; }
+.health-dot { width:.48rem; height:.48rem; border-radius:9999px; background:#94a3b8; }
+.health-up .health-dot { background:#1d9a62; box-shadow:0 0 0 3px #e3f5eb; }
+.health-down .health-dot { background:#e04b54; box-shadow:0 0 0 3px #fff0f0; }
+.icon-button { display:inline-flex; height:38px; width:38px; align-items:center; justify-content:center; border-radius:12px; border:1px solid #e5ebea; background:white; color:#64748b; transition:color .15s,border .15s; }
+.icon-button:hover { border-color:#b7ccbf; color:#245c4c; }
+.section-title { font-size:1rem; font-weight:650; letter-spacing:-.015em; }
+.section-subtitle { margin-top:.3rem; font-size:.76rem; color:#718096; }
+.table-head { padding:.8rem .9rem; color:#778397; font-size:.65rem; font-weight:700; letter-spacing:.08em; text-transform:uppercase; }
+.primary-button { display:inline-flex; align-items:center; justify-content:center; gap:.42rem; border:1px solid #245c4c; border-radius:.65rem; background:#245c4c; padding:.55rem .75rem; color:white; font-size:.72rem; font-weight:650; transition:background-color .15s,border .15s; }
+.primary-button:hover:not(:disabled) { border-color:#194838; background:#194838; }
+.primary-button:disabled { cursor:wait; opacity:.7; }
+.button-spinner { height:13px; width:13px; border:2px solid rgba(255,255,255,.4); border-top-color:white; border-radius:50%; animation:spin .7s linear infinite; }
+.metric-icon { display:flex; height:34px; width:34px; align-items:center; justify-content:center; border-radius:11px; }
+.metric-green { background:#e6f3ed; color:#2c775c; }
+.metric-blue { background:#e8f0fc; color:#4772b7; }
+.metric-violet { background:#f0ebfa; color:#775eb0; }
+.metric-amber { background:#fff3df; color:#ba801c; }
+.metric-rose { background:#fcebea; color:#c56462; }
+.skeleton { border-radius:.6rem; background:linear-gradient(90deg,#f0f3f5 25%,#f7f8fa 50%,#f0f3f5 75%); background-size:200% 100%; }
+@keyframes spin { to { transform:rotate(360deg); } }
+
+@media (max-width: 1023px) {
+  .sidebar { position:static; width:100%; min-height:auto; flex-direction:row; align-items:center; gap:1.25rem; padding:.85rem 1.1rem; }
+  .sidebar > div:nth-of-type(2), .sidebar > div:nth-of-type(3) { display:none; }
+  .sidebar nav { display:flex; gap:.3rem; margin:0 0 0 auto; }
+  .nav-link { padding:.55rem .65rem; font-size:.75rem; }
+  .nav-link svg { display:none; }
+  .main-content { margin-left:0; padding:1.5rem; }
+}
+@media (max-width: 640px) {
+  .sidebar { display:block; padding:.8rem 1rem .65rem; }
+  .sidebar > div:first-child { padding-left:.2rem; }
+  .sidebar nav { margin:.65rem 0 0; overflow-x:auto; }
+  .nav-link { flex:0 0 auto; white-space:nowrap; }
+  .main-content { padding:1.15rem 1rem; }
+  .main-content header { align-items:flex-start; }
+  .main-content header h1 { max-width:17rem; font-size:1.35rem; }
+  .health-pill { padding:.52rem .65rem; font-size:.67rem; }
+}
